@@ -1,0 +1,10 @@
+galaxy_info:
+  role_name: apache_superset
+  author: rmp2000
+  description: Native Superset with PostgreSQL metadata, private Gunicorn and optional ClickHouse dashboards.
+  license: Apache-2.0
+  min_ansible_version: '2.16'
+  platforms:
+    - name: Ubuntu
+      versions: [jammy]
+dependencies: []

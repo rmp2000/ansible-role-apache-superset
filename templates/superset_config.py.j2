@@ -1,0 +1,14 @@
+import json
+from pathlib import Path
+from urllib.parse import quote
+settings = json.loads(Path('/etc/apache-superset/settings.json').read_text())
+SECRET_KEY = settings['secret_key']
+SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://superset:'+quote(settings['database_password'],safe='')+'@127.0.0.1:5433/superset'
+DATA_DIR = settings['data_dir']+'/state'
+WTF_CSRF_ENABLED = True
+TALISMAN_ENABLED = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+ENABLE_PROXY_FIX = False
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+FEATURE_FLAGS = {'ALERT_REPORTS': False}

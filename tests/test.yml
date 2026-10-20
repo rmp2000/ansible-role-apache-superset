@@ -1,0 +1,9 @@
+- hosts: localhost
+  connection: local
+  become: true
+  vars:
+    apache_superset_secret_key: ci-only-secret-key-12345678901234567890
+    apache_superset_admin_password: ci-only-admin-password-1234567890
+    apache_superset_database_password: ci-only-database-password-1234567890
+  roles:
+  - apache_superset

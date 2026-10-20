@@ -1,0 +1,10 @@
+- name: Restart Superset metadata database
+  ansible.builtin.systemd:
+    name: postgresql@14-superset
+    state: restarted
+    daemon_reload: true
+- name: Restart Apache Superset
+  ansible.builtin.systemd:
+    name: apache-superset
+    state: restarted
+    daemon_reload: true

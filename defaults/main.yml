@@ -1,0 +1,15 @@
+apache_superset_version: 6.1.0
+apache_superset_bind_address: 127.0.0.1
+apache_superset_port: 8088
+apache_superset_data_dir: /srv/apache-superset
+apache_superset_require_data_mount: false
+apache_superset_secret_key: ''
+apache_superset_admin_password: ''
+apache_superset_database_password: ''
+apache_superset_analytics_enabled: false
+apache_superset_clickhouse_host: 127.0.0.1
+apache_superset_clickhouse_password: ''
+apache_superset_clickhouse_ca_pem: ''
+apache_superset_verify: true
+apache_superset_test_restart: false
+apache_superset_test_backup: false

@@ -1,0 +1,23 @@
+[Unit]
+Description=Apache Superset private analytics UI
+After=network-online.target postgresql@14-superset.service
+Requires=postgresql@14-superset.service
+RequiresMountsFor={{ apache_superset_data_dir }}
+[Service]
+User=superset
+Group=superset
+WorkingDirectory={{ apache_superset_data_dir }}
+Environment=SUPERSET_CONFIG_PATH=/etc/apache-superset/superset_config.py
+Environment=FLASK_APP=superset
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/apache-superset/bin/gunicorn --bind {{ apache_superset_bind_address }}:{{ apache_superset_port }} --workers 2 --threads 4 --worker-class gthread --timeout 120 'superset.app:create_app()'
+Restart=on-failure
+RestartSec=5
+UMask=0027
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths={{ apache_superset_data_dir }} /var/log/apache-superset
+[Install]
+WantedBy=multi-user.target

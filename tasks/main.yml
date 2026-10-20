@@ -1,0 +1,254 @@
+- name: Validate environment and strong per-deployment secrets
+  ansible.builtin.assert:
+    that:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_distribution_major_version == '22'
+    - apache_superset_secret_key | length >= 32
+    - apache_superset_admin_password | length >= 24
+    - apache_superset_database_password | length >= 24
+  no_log: true
+- name: Require persistent application storage when requested
+  ansible.builtin.command:
+    argv:
+    - mountpoint
+    - -q
+    - '{{ apache_superset_data_dir }}'
+  changed_when: false
+  when: apache_superset_require_data_mount | bool
+- name: Install Python and PostgreSQL cluster management
+  ansible.builtin.apt:
+    name:
+    - python3-venv
+    - python3-pip
+    - python3-dev
+    - python3-psycopg2
+    - build-essential
+    - libssl-dev
+    - libffi-dev
+    - libpq-dev
+    - libsasl2-dev
+    - libldap2-dev
+    - pkg-config
+    - postgresql-common
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Prevent an unnecessary default database cluster on this dedicated host
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql-common/createcluster.conf
+    regexp: ^#?create_main_cluster
+    line: create_main_cluster = false
+- name: Install the local PostgreSQL metadata backend
+  ansible.builtin.apt:
+    name:
+    - postgresql-14
+    - postgresql-client-14
+    state: present
+    policy_rc_d: 101
+- name: Create an unprivileged Superset account
+  ansible.builtin.user:
+    name: superset
+    system: true
+    create_home: false
+    home: '{{ apache_superset_data_dir }}'
+    shell: /usr/sbin/nologin
+- name: Create persistent state and protected configuration
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: superset
+    group: superset
+    mode: '0750'
+  loop:
+  - '{{ apache_superset_data_dir }}'
+  - '{{ apache_superset_data_dir }}/state'
+  - /var/log/apache-superset
+  - /etc/apache-superset
+- name: Create the database backup directory
+  ansible.builtin.file:
+    path: '{{ apache_superset_data_dir }}/backups'
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0750'
+- name: Initialize a dedicated metadata cluster on the data volume
+  ansible.builtin.command:
+    argv:
+    - pg_createcluster
+    - '14'
+    - superset
+    - --port
+    - '5433'
+    - --datadir
+    - '{{ apache_superset_data_dir }}/postgresql'
+    - --
+    - --auth-local=peer
+    - --auth-host=scram-sha-256
+    creates: /etc/postgresql/14/superset/postgresql.conf
+- name: Bind metadata PostgreSQL exclusively to loopback
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/14/superset/postgresql.conf
+    regexp: ^#?listen_addresses
+    line: listen_addresses = '127.0.0.1'
+  notify: Restart Superset metadata database
+- name: Order metadata PostgreSQL after the persistent filesystem
+  ansible.builtin.file:
+    path: /etc/systemd/system/postgresql@14-superset.service.d
+    state: directory
+    mode: '0755'
+- name: Require the metadata volume at startup
+  ansible.builtin.copy:
+    content: '[Unit]
+
+      RequiresMountsFor={{ apache_superset_data_dir }}
+
+      '
+    dest: /etc/systemd/system/postgresql@14-superset.service.d/storage.conf
+    mode: '0644'
+  notify: Restart Superset metadata database
+- name: Apply metadata service changes
+  ansible.builtin.meta: flush_handlers
+- name: Start the metadata database
+  ansible.builtin.systemd:
+    name: postgresql@14-superset
+    state: started
+    enabled: true
+    daemon_reload: true
+- name: Provision the dedicated metadata database without command-line passwords
+  ansible.builtin.command:
+    argv:
+    - /usr/bin/python3
+    - -c
+    - import json,sys,psycopg2; from psycopg2 import sql; p=json.load(sys.stdin)['password']; c=psycopg2.connect(dbname='postgres',port=5433);
+      c.autocommit=True; q=c.cursor(); q.execute("SELECT 1 FROM pg_roles WHERE rolname='superset'"); exists=q.fetchone(); q.execute(sql.SQL('ALTER
+      ROLE superset WITH LOGIN PASSWORD %s' if exists else 'CREATE ROLE superset LOGIN PASSWORD %s'),[p]); q.execute("SELECT 1 FROM
+      pg_database WHERE datname='superset'"); exists=q.fetchone(); q.execute('CREATE DATABASE superset OWNER superset') if not exists
+      else None; print('DATABASE_CREATED' if not exists else 'DATABASE_OK')
+    stdin: '{{ {''password'':apache_superset_database_password} | to_json }}'
+  become: true
+  become_user: postgres
+  register: superset_db
+  changed_when: '''DATABASE_CREATED'' in superset_db.stdout'
+  no_log: true
+- name: Install the pinned application and SQL driver in its own virtual environment
+  ansible.builtin.pip:
+    name:
+    - apache-superset=={{ apache_superset_version }}
+    - clickhouse-connect==1.11.0
+    - gunicorn==26.2.0
+    - psycopg2-binary==2.9.13
+    virtualenv: /opt/apache-superset
+    virtualenv_command: python3 -m venv
+    extra_args: --no-cache-dir
+  async: 1200
+  poll: 10
+  notify: Restart Apache Superset
+- name: Install protected application settings
+  ansible.builtin.copy:
+    content: '{{ {''secret_key'':apache_superset_secret_key,''admin_password'':apache_superset_admin_password,''database_password'':apache_superset_database_password,''data_dir'':apache_superset_data_dir,''analytics_enabled'':apache_superset_analytics_enabled,''clickhouse_host'':apache_superset_clickhouse_host,''clickhouse_password'':apache_superset_clickhouse_password}
+      | to_nice_json }}'
+    dest: /etc/apache-superset/settings.json
+    owner: root
+    group: superset
+    mode: '0640'
+  no_log: true
+  notify: Restart Apache Superset
+- name: Install the trusted analytics server certificate
+  ansible.builtin.copy:
+    content: '{{ apache_superset_clickhouse_ca_pem }}'
+    dest: /etc/apache-superset/clickhouse-ca.crt
+    owner: root
+    group: superset
+    mode: '0640'
+  when: apache_superset_analytics_enabled | bool
+  notify: Restart Apache Superset
+- name: Install application configuration and production service
+  ansible.builtin.template:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+    owner: root
+    group: superset
+    mode: '0640'
+  loop:
+  - src: superset_config.py.j2
+    dest: /etc/apache-superset/superset_config.py
+  - src: apache-superset.service.j2
+    dest: /etc/systemd/system/apache-superset.service
+  notify: Restart Apache Superset
+- name: Install provisioning and functional verification tools
+  ansible.builtin.copy:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+    mode: '0755'
+  loop:
+  - src: provision.py
+    dest: /usr/local/bin/apache-superset-provision
+  - src: verify.py
+    dest: /usr/local/bin/apache-superset-verify
+- name: Upgrade the application metadata schema
+  ansible.builtin.command:
+    argv:
+    - /opt/apache-superset/bin/superset
+    - db
+    - upgrade
+  environment:
+    SUPERSET_CONFIG_PATH: /etc/apache-superset/superset_config.py
+    FLASK_APP: superset
+    PYTHONDONTWRITEBYTECODE: '1'
+  become: true
+  become_user: superset
+  register: superset_migration
+  changed_when: '''Running upgrade'' in (superset_migration.stdout + superset_migration.stderr)'
+  no_log: true
+- name: Provision the administrator and optional analytics dashboard idempotently
+  ansible.builtin.command:
+    argv:
+    - /opt/apache-superset/bin/python
+    - /usr/local/bin/apache-superset-provision
+  environment:
+    SUPERSET_CONFIG_PATH: /etc/apache-superset/superset_config.py
+    FLASK_APP: superset
+    PYTHONDONTWRITEBYTECODE: '1'
+  become: true
+  become_user: superset
+  register: superset_provision
+  changed_when: '''PROVISION_CHANGED'' in superset_provision.stdout'
+  no_log: true
+- name: Apply the production application service
+  ansible.builtin.meta: flush_handlers
+- name: Enable the private application server
+  ansible.builtin.systemd:
+    name: apache-superset
+    state: started
+    enabled: true
+    daemon_reload: true
+- name: Verify health authenticated login and rejection of invalid credentials
+  ansible.builtin.command:
+    argv:
+    - /opt/apache-superset/bin/python
+    - /usr/local/bin/apache-superset-verify
+    - smoke
+  changed_when: false
+  register: superset_ready
+  until: superset_ready.rc == 0
+  retries: 24
+  delay: 5
+  when: apache_superset_verify | bool
+- name: Report application success
+  ansible.builtin.debug:
+    msg: APACHE_SUPERSET_SMOKE_OK
+  when: apache_superset_verify | bool
+- name: Optionally verify application restart persistence
+  ansible.builtin.command:
+    argv:
+    - /opt/apache-superset/bin/python
+    - /usr/local/bin/apache-superset-verify
+    - restart
+  when: apache_superset_test_restart | bool
+- name: Optionally restore a metadata backup into an isolated database
+  ansible.builtin.command:
+    argv:
+    - /opt/apache-superset/bin/python
+    - /usr/local/bin/apache-superset-verify
+    - backup
+  when: apache_superset_test_backup | bool

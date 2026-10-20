@@ -30,6 +30,7 @@
     - libldap2-dev
     - pkg-config
     - postgresql-common
+    - acl
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -52,6 +53,13 @@
     create_home: false
     home: '{{ apache_superset_data_dir }}'
     shell: /usr/sbin/nologin
+- name: Allow both service accounts to traverse the shared volume root
+  ansible.builtin.file:
+    path: '{{ apache_superset_data_dir }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 - name: Create persistent state and protected configuration
   ansible.builtin.file:
     path: '{{ item }}'
@@ -60,7 +68,6 @@
     group: superset
     mode: '0750'
   loop:
-  - '{{ apache_superset_data_dir }}'
   - '{{ apache_superset_data_dir }}/state'
   - /var/log/apache-superset
   - /etc/apache-superset

@@ -78,7 +78,8 @@ def main():
         charts=request(s,'GET','/api/v1/dashboard/'+str(dashboard['id'])+'/charts').json()['result']
         if len(charts)!=2:raise RuntimeError('Dashboard charts missing')
         for chart in charts:
-            context=chart.get('query_context')
+            detail=request(s,'GET','/api/v1/chart/'+str(chart['id'])).json()['result']
+            context=detail.get('query_context')
             if isinstance(context,str):context=json.loads(context)
             if not context:raise RuntimeError('Chart query configuration missing')
             result=request(s,'POST','/api/v1/chart/data',json=context).json()

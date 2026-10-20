@@ -51,7 +51,7 @@
     name: superset
     system: true
     create_home: false
-    home: '{{ apache_superset_data_dir }}'
+    home: '{{ apache_superset_data_dir }}/state'
     shell: /usr/sbin/nologin
 - name: Allow both service accounts to traverse the shared volume root
   ansible.builtin.file:
@@ -144,6 +144,7 @@
     - clickhouse-connect==1.11.0
     - gunicorn==26.2.0
     - psycopg2-binary==2.9.13
+    - rich==15.0.0
     virtualenv: /opt/apache-superset
     virtualenv_command: python3 -m venv
     extra_args: --no-cache-dir

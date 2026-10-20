@@ -192,12 +192,14 @@
     dest: /usr/local/bin/apache-superset-provision
   - src: verify.py
     dest: /usr/local/bin/apache-superset-verify
+  - src: manage.py
+    dest: /usr/local/bin/apache-superset-manage
 - name: Upgrade the application metadata schema
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/superset
-    - db
-    - upgrade
+    - /opt/apache-superset/bin/python
+    - /usr/local/bin/apache-superset-manage
+    - migrate
   environment:
     SUPERSET_CONFIG_PATH: /etc/apache-superset/superset_config.py
     FLASK_APP: superset
@@ -205,13 +207,13 @@
   become: true
   become_user: superset
   register: superset_migration
-  changed_when: '''Running upgrade'' in (superset_migration.stdout + superset_migration.stderr)'
-  no_log: true
+  changed_when: '''SCHEMA_CHANGED'' in superset_migration.stdout'
 - name: Provision the administrator and optional analytics dashboard idempotently
   ansible.builtin.command:
     argv:
     - /opt/apache-superset/bin/python
-    - /usr/local/bin/apache-superset-provision
+    - /usr/local/bin/apache-superset-manage
+    - provision
   environment:
     SUPERSET_CONFIG_PATH: /etc/apache-superset/superset_config.py
     FLASK_APP: superset
@@ -220,7 +222,6 @@
   become_user: superset
   register: superset_provision
   changed_when: '''PROVISION_CHANGED'' in superset_provision.stdout'
-  no_log: true
 - name: Apply the production application service
   ansible.builtin.meta: flush_handlers
 - name: Enable the private application server

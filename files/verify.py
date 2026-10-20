@@ -12,7 +12,7 @@ STATE=ROOT/'.verification.json'
 URL='https://127.0.0.1:8088'
 CA='/etc/apache-superset/tls/server.crt'
 def session():
-    s=requests.Session();s.verify=CA
+    s=requests.Session();s.verify=CA;s.headers['Referer']=URL+'/'
     r=s.post(URL+'/api/v1/security/login',json={'username':'admin','password':SETTINGS['admin_password'],'provider':'db','refresh':True},timeout=30)
     r.raise_for_status();s.headers['Authorization']='Bearer '+r.json()['access_token']
     r=s.get(URL+'/api/v1/security/csrf_token/',timeout=30);r.raise_for_status();s.headers['X-CSRFToken']=r.json()['result']

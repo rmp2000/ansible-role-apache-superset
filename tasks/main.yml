@@ -31,6 +31,7 @@
     - pkg-config
     - postgresql-common
     - acl
+    - openssl
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -126,16 +127,17 @@
     argv:
     - /usr/bin/python3
     - -c
-    - import json,sys,psycopg2; from psycopg2 import sql; p=json.load(sys.stdin)['password']; c=psycopg2.connect(dbname='postgres',port=5433);
-      c.autocommit=True; q=c.cursor(); q.execute("SELECT 1 FROM pg_roles WHERE rolname='superset'"); exists=q.fetchone(); q.execute(sql.SQL('ALTER
-      ROLE superset WITH LOGIN PASSWORD %s' if exists else 'CREATE ROLE superset LOGIN PASSWORD %s'),[p]); q.execute("SELECT 1 FROM
-      pg_database WHERE datname='superset'"); exists=q.fetchone(); q.execute('CREATE DATABASE superset OWNER superset') if not exists
-      else None; print('DATABASE_CREATED' if not exists else 'DATABASE_OK')
+    - "import json,sys,psycopg2\np=json.load(sys.stdin)['password']\nvalid=False\ntry:\n test=psycopg2.connect(dbname='superset',user='superset',password=p,host='127.0.0.1',port=5433)\n\
+      \ test.close();valid=True\nexcept psycopg2.OperationalError:pass\nc=psycopg2.connect(dbname='postgres',port=5433);c.autocommit=True;q=c.cursor()\n\
+      q.execute(\"SELECT 1 FROM pg_roles WHERE rolname='superset'\");exists=q.fetchone()\nchanged=False\nif not valid:\n q.execute('ALTER\
+      \ ROLE superset WITH LOGIN PASSWORD %s' if exists else 'CREATE ROLE superset LOGIN PASSWORD %s',[p]);changed=True\nq.execute(\"\
+      SELECT 1 FROM pg_database WHERE datname='superset'\")\nif not q.fetchone():q.execute('CREATE DATABASE superset OWNER superset');changed=True\n\
+      print('DATABASE_CHANGED' if changed else 'DATABASE_OK')\n"
     stdin: '{{ {''password'':apache_superset_database_password} | to_json }}'
   become: true
   become_user: postgres
   register: superset_db
-  changed_when: '''DATABASE_CREATED'' in superset_db.stdout'
+  changed_when: '''DATABASE_CHANGED'' in superset_db.stdout'
   no_log: true
 - name: Install the pinned application and SQL driver in its own virtual environment
   ansible.builtin.pip:
@@ -151,6 +153,44 @@
   async: 1200
   poll: 10
   notify: Restart Apache Superset
+- name: Create the protected HTTPS identity directory
+  ansible.builtin.file:
+    path: /etc/apache-superset/tls
+    state: directory
+    owner: root
+    group: superset
+    mode: '0750'
+- name: Generate the persistent private HTTPS server certificate
+  ansible.builtin.command:
+    argv:
+    - openssl
+    - req
+    - -x509
+    - -newkey
+    - rsa:3072
+    - -nodes
+    - -days
+    - '365'
+    - -keyout
+    - /etc/apache-superset/tls/server.key
+    - -out
+    - /etc/apache-superset/tls/server.crt
+    - -subj
+    - /CN=apache-superset
+    - -addext
+    - subjectAltName=DNS:localhost,DNS:{{ ansible_hostname }},DNS:{{ ansible_fqdn }},IP:127.0.0.1,IP:{{ ansible_all_ipv4_addresses |
+      join(',IP:') }}
+    creates: /etc/apache-superset/tls/server.crt
+  notify: Restart Apache Superset
+- name: Restrict access to the HTTPS key and certificate
+  ansible.builtin.file:
+    path: /etc/apache-superset/tls/{{ item }}
+    owner: root
+    group: superset
+    mode: '0640'
+  loop:
+  - server.key
+  - server.crt
 - name: Install protected application settings
   ansible.builtin.copy:
     content: '{{ {''secret_key'':apache_superset_secret_key,''admin_password'':apache_superset_admin_password,''database_password'':apache_superset_database_password,''data_dir'':apache_superset_data_dir,''analytics_enabled'':apache_superset_analytics_enabled,''clickhouse_host'':apache_superset_clickhouse_host,''clickhouse_password'':apache_superset_clickhouse_password}

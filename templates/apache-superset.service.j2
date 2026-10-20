@@ -10,7 +10,7 @@ WorkingDirectory={{ apache_superset_data_dir }}
 Environment=SUPERSET_CONFIG_PATH=/etc/apache-superset/superset_config.py
 Environment=FLASK_APP=superset
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/apache-superset/bin/gunicorn --bind {{ apache_superset_bind_address }}:{{ apache_superset_port }} --workers 2 --threads 4 --worker-class gthread --timeout 120 'superset.app:create_app()'
+ExecStart=/opt/apache-superset/bin/gunicorn --bind {{ apache_superset_bind_address }}:{{ apache_superset_port }} --certfile /etc/apache-superset/tls/server.crt --keyfile /etc/apache-superset/tls/server.key --workers 2 --threads 4 --worker-class gthread --timeout 120 'superset.app:create_app()'
 Restart=on-failure
 RestartSec=5
 UMask=0027

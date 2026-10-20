@@ -9,9 +9,10 @@ import requests
 SETTINGS=json.loads(Path('/etc/apache-superset/settings.json').read_text())
 ROOT=Path(SETTINGS['data_dir'])
 STATE=ROOT/'.verification.json'
-URL='http://127.0.0.1:8088'
+URL='https://127.0.0.1:8088'
+CA='/etc/apache-superset/tls/server.crt'
 def session():
-    s=requests.Session()
+    s=requests.Session();s.verify=CA
     r=s.post(URL+'/api/v1/security/login',json={'username':'admin','password':SETTINGS['admin_password'],'provider':'db','refresh':True},timeout=30)
     r.raise_for_status();s.headers['Authorization']='Bearer '+r.json()['access_token']
     r=s.get(URL+'/api/v1/security/csrf_token/',timeout=30);r.raise_for_status();s.headers['X-CSRFToken']=r.json()['result']
@@ -60,9 +61,9 @@ def main():
         print('SUPERSET_BACKUP_RESTORE_OK');return
     if mode!='smoke':raise RuntimeError('Unknown verification mode')
     request(s,'GET','/api/v1/me/')
-    bad=requests.post(URL+'/api/v1/security/login',json={'username':'admin','password':'invalid-password','provider':'db'},timeout=20)
+    bad=requests.post(URL+'/api/v1/security/login',json={'username':'admin','password':'invalid-password','provider':'db'},timeout=20,verify=CA)
     if bad.status_code<400:raise RuntimeError('Invalid administrator password accepted')
-    unauth=requests.get(URL+'/api/v1/dashboard/',timeout=20)
+    unauth=requests.get(URL+'/api/v1/dashboard/',timeout=20,verify=CA)
     if unauth.status_code<400:raise RuntimeError('Dashboard API accepted anonymous access')
     if SETTINGS['analytics_enabled']:
         r=request(s,'GET','/api/v1/dataset/').json()

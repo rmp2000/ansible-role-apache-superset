@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import quote
 from werkzeug.security import check_password_hash
 settings=json.loads(Path('/etc/apache-superset/settings.json').read_text())
-marker=Path(settings['data_dir'])/'.initialized-6.1.0'
+marker=Path(settings['data_dir'])/'state/.initialized-6.1.0'
 changed=False
 if not marker.exists():
     subprocess.run(['/opt/apache-superset/bin/superset','init'],check=True,capture_output=True)
@@ -61,5 +61,5 @@ with app.app_context():
         if dashboard.position_json!=position_json or {x.id for x in dashboard.slices}!={x.id for x in charts}:
             dashboard.position_json=position_json;dashboard.slices=charts;changed=True
     db.session.commit()
-marker.write_text('Initialized metadata and roles\n')
+if not marker.exists():marker.write_text('Initialized metadata and roles\n')
 print('SUPERSET_PROVISION_CHANGED' if changed else 'SUPERSET_PROVISION_OK')

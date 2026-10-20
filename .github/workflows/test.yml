@@ -33,7 +33,7 @@ jobs:
         with:
           path: roles/apache_superset
       - run: pip install 'ansible==8.7.0'
-      - run: ansible-galaxy role install https://github.com/rmp2000/ansible-role-clickhouse/archive/7fcc22f1101c8e6f5b903c24cdcd653bb1aba174.tar.gz,clickhouse -p roles
+      - run: ansible-galaxy role install -r roles/apache_superset/tests/requirements.yml -p roles
       - name: Verify TLS SQL connection and saved dashboard charts
         run: ansible-playbook -b roles/apache_superset/tests/analytics.yml
       - name: Verify analytics provisioning idempotence

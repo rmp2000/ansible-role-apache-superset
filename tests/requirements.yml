@@ -1,0 +1,2 @@
+- name: clickhouse
+  src: https://github.com/rmp2000/ansible-role-clickhouse/archive/7fcc22f1101c8e6f5b903c24cdcd653bb1aba174.tar.gz

@@ -8,7 +8,7 @@ settings=json.loads(Path('/etc/apache-superset/settings.json').read_text())
 marker=Path(settings['data_dir'])/'state/.initialized-6.1.0'
 changed=False
 if not marker.exists():
-    subprocess.run(['/opt/apache-superset/bin/superset','init'],check=True,capture_output=True)
+    subprocess.run(['/opt/apache-superset-py310/bin/superset','init'],check=True,capture_output=True)
     changed=True
 from superset.app import create_app
 from superset import db

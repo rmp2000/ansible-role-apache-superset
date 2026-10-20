@@ -148,8 +148,8 @@
     - psycopg2-binary==2.9.13
     - rich==15.0.0
     - cachetools==7.2.4
-    virtualenv: /opt/apache-superset
-    virtualenv_command: python3 -m venv
+    virtualenv: /opt/apache-superset-py310
+    virtualenv_command: /usr/bin/python3.10 -m venv
     extra_args: --no-cache-dir
   async: 1200
   poll: 10
@@ -239,7 +239,7 @@
 - name: Upgrade the application metadata schema
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/python
+    - /opt/apache-superset-py310/bin/python
     - /usr/local/bin/apache-superset-manage
     - migrate
   environment:
@@ -253,7 +253,7 @@
 - name: Provision the administrator and optional analytics dashboard idempotently
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/python
+    - /opt/apache-superset-py310/bin/python
     - /usr/local/bin/apache-superset-manage
     - provision
   environment:
@@ -275,7 +275,7 @@
 - name: Verify health authenticated login and rejection of invalid credentials
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/python
+    - /opt/apache-superset-py310/bin/python
     - /usr/local/bin/apache-superset-verify
     - smoke
   changed_when: false
@@ -291,14 +291,14 @@
 - name: Optionally verify application restart persistence
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/python
+    - /opt/apache-superset-py310/bin/python
     - /usr/local/bin/apache-superset-verify
     - restart
   when: apache_superset_test_restart | bool
 - name: Optionally restore a metadata backup into an isolated database
   ansible.builtin.command:
     argv:
-    - /opt/apache-superset/bin/python
+    - /opt/apache-superset-py310/bin/python
     - /usr/local/bin/apache-superset-verify
     - backup
   when: apache_superset_test_backup | bool

@@ -3,7 +3,7 @@ from pathlib import Path
 from urllib.parse import quote
 settings=json.loads(Path('/etc/apache-superset/settings.json').read_text())
 mode=sys.argv[1]
-command=['/opt/apache-superset/bin/superset','db','upgrade'] if mode=='migrate' else ['/opt/apache-superset/bin/python','/usr/local/bin/apache-superset-provision']
+command=['/opt/apache-superset-py310/bin/superset','db','upgrade'] if mode=='migrate' else ['/opt/apache-superset-py310/bin/python','/usr/local/bin/apache-superset-provision']
 result=subprocess.run(command,capture_output=True,text=True)
 text=result.stdout+'\\n'+result.stderr
 for value in settings.values():

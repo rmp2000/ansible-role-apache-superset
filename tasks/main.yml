@@ -147,6 +147,7 @@
     - gunicorn==26.2.0
     - psycopg2-binary==2.9.13
     - rich==15.0.0
+    - cachetools==7.2.4
     virtualenv: /opt/apache-superset
     virtualenv_command: python3 -m venv
     extra_args: --no-cache-dir

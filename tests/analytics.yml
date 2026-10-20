@@ -1,0 +1,22 @@
+- hosts: localhost
+  connection: local
+  become: true
+  vars:
+    clickhouse_admin_password: ci-only-admin-password-1234567890
+    clickhouse_writer_password: ci-only-writer-password-1234567890
+    clickhouse_reader_password: ci-only-reader-password-1234567890
+    apache_superset_secret_key: ci-only-secret-key-123456789012345678901234567890
+    apache_superset_admin_password: ci-only-admin-password-1234567890
+    apache_superset_database_password: ci-only-database-password-1234567890
+  roles:
+    - clickhouse
+  tasks:
+    - ansible.builtin.slurp:
+        src: /etc/clickhouse-platform/tls/server.crt
+      register: ci_certificate
+    - ansible.builtin.include_role:
+        name: apache_superset
+      vars:
+        apache_superset_analytics_enabled: true
+        apache_superset_clickhouse_password: '{{ clickhouse_reader_password }}'
+        apache_superset_clickhouse_ca_pem: '{{ ci_certificate.content | b64decode }}'

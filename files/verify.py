@@ -72,7 +72,17 @@ def main():
         identifier=datasets[0]['id']
         data=request(s,'POST','/api/v1/chart/data',json={'datasource':{'id':identifier,'type':'table'},'queries':[{'columns':['sensor','sample_count','average'],'row_limit':1000}],'result_format':'json','result_type':'full'}).json()
         if not data.get('result') or data['result'][0].get('error'):raise RuntimeError('Live analytics chart query failed')
-        request(s,'GET','/superset/dashboard/data-platform-measurements/')
+        dashboards=request(s,'GET','/api/v1/dashboard/').json()['result']
+        dashboard=next((v for v in dashboards if v['slug']=='data-platform-measurements'),None)
+        if dashboard is None:raise RuntimeError('Published dashboard missing')
+        charts=request(s,'GET','/api/v1/dashboard/'+str(dashboard['id'])+'/charts').json()['result']
+        if len(charts)!=2:raise RuntimeError('Dashboard charts missing')
+        for chart in charts:
+            context=chart.get('query_context')
+            if isinstance(context,str):context=json.loads(context)
+            if not context:raise RuntimeError('Chart query configuration missing')
+            result=request(s,'POST','/api/v1/chart/data',json=context).json()
+            if not result.get('result') or result['result'][0].get('error'):raise RuntimeError('Saved dashboard chart failed')
         print('SUPERSET_ANALYTICS_QUERY_OK')
     print('APACHE_SUPERSET_SMOKE_OK')
 if __name__=='__main__':

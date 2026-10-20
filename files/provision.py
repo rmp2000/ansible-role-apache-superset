@@ -42,12 +42,16 @@ with app.app_context():
         charts=[]
         specs=[('Measurements - latest values','table',{'query_mode':'raw','all_columns':['sensor','sample_count','total','average'],'row_limit':1000}),('Measurements - sample counts','pie',{'groupby':['sensor'],'metric':{'expressionType':'SIMPLE','column':{'column_name':'sample_count','type':'BIGINT'},'aggregate':'SUM','label':'Samples'},'row_limit':1000,'show_labels':True})]
         for title,viz,params in specs:
-            params.update({'datasource':str(dataset.id)+'__table','viz_type':viz})
+            params.update({'datasource':str(dataset.id)+'__table','viz_type':viz,'adhoc_filters':[{'expressionType':'SQL','clause':'WHERE','sqlExpression':"NOT startsWith(sensor, 'verify_')",'filterOptionName':'exclude_verification'}]})
             value=json.dumps(params,sort_keys=True)
             chart=db.session.query(Slice).filter_by(slice_name=title).one_or_none()
             if chart is None:
                 chart=Slice(slice_name=title,viz_type=viz,datasource_type='table',datasource_id=dataset.id,params=value,owners=[user]);db.session.add(chart);changed=True
             elif chart.params!=value:chart.params=value;changed=True
+            query={'columns':['sensor','sample_count','total','average'],'row_limit':1000,'filters':[],'extras':{'where':"NOT startsWith(sensor, 'verify_')"}}
+            if viz=='pie':query.update(columns=['sensor'],metrics=[params['metric']])
+            context=json.dumps({'datasource':{'id':dataset.id,'type':'table'},'queries':[query],'result_format':'json','result_type':'full'},sort_keys=True)
+            if chart.query_context!=context:chart.query_context=context;changed=True
             charts.append(chart)
         db.session.flush()
         dashboard=db.session.query(Dashboard).filter_by(slug='data-platform-measurements').one_or_none()

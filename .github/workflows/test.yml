@@ -23,3 +23,21 @@ jobs:
       - name: Diagnostics
         if: failure()
         run: sudo journalctl -u apache-superset -u postgresql@14-superset --no-pager -n 100
+  analytics:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    env:
+      ANSIBLE_ROLES_PATH: ./roles
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: roles/apache_superset
+      - run: pip install 'ansible==8.7.0'
+      - run: ansible-galaxy role install https://github.com/rmp2000/ansible-role-clickhouse/archive/7fcc22f1101c8e6f5b903c24cdcd653bb1aba174.tar.gz,clickhouse -p roles
+      - name: Verify TLS SQL connection and saved dashboard charts
+        run: ansible-playbook -b roles/apache_superset/tests/analytics.yml
+      - name: Verify analytics provisioning idempotence
+        run: |
+          set -o pipefail
+          ansible-playbook -b roles/apache_superset/tests/analytics.yml | tee /tmp/superset-analytics-idempotence.log
+          grep -Eq 'changed=0[[:space:]]+unreachable=0[[:space:]]+failed=0' /tmp/superset-analytics-idempotence.log
